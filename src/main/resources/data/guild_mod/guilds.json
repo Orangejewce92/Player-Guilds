@@ -1,0 +1,14 @@
+{
+  "thieves_guild": {
+    "name": "Thieves Guild",
+    "ranks": ["Novice", "Apprentice", "Journeyman", "Master"]
+  },
+  "mages_guild": {
+    "name": "Mages Guild",
+    "ranks": ["Initiate", "Adept", "Magician", "Archmage"]
+  },
+  "knights_guild": {
+    "name": "Knights Guild",
+    "ranks": ["Squire", "Knight", "Paladin", "Champion"]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "command.guild.check.none": "You are not a member of any guild.",
+  "command.guild.check.member": "You are a member of the %s guild.",
+  "command.quest.complete.success": "Quest %s completed!",
+  "command.quest.complete.not_found": "Quest %s not found.",
+  "command.quest.assign.found": "Quest %s assigned to %s.",
+  "command.quest.assign.not_found": "Quest %s not found.",
+  "command.guild.join.not_found": "Guild '%s' not found.",
+  "command.guild.join.success": "Successfully joined the guild '%s'.",
+  "command.guild.join.failed": "Failed to join guild.",
+  "command.guild.check.success": "You are a member of the guild '%s'."
+}
