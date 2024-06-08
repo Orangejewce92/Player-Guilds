@@ -28,7 +28,7 @@ public class GuildManager {
     private static final Map<String, String> playerGuilds = new HashMap<>();
     private static final Map<String, String> guildOwners = new HashMap<>();
     private static final Map<String, String> ownerNames = new HashMap<>();
-    private static final Map<String, Map<String, String>> guildRanks = new HashMap<>(); // Maps guild names to player UUIDs and their ranks
+    private static Map<String, Map<String, String>> guildRanks = new HashMap<>();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static File dataFile;
     private static final Map<String, ItemStackHandler> guildStorages = new HashMap<>();
@@ -65,7 +65,10 @@ public class GuildManager {
         leaveCurrentGuild(player);
         guildMembers.get(guildName).add(player.getStringUUID());
         playerGuilds.put(player.getStringUUID(), guildName);
-        guildRanks.computeIfAbsent(guildName, k -> new HashMap<>()).put(player.getStringUUID(), RECRUIT);
+        if (!guildRanks.containsKey(guildName)) {
+            guildRanks.put(guildName, new HashMap<>());
+        }
+        guildRanks.get(guildName).put(player.getStringUUID(), RECRUIT);
         saveGuildData();
         return true;
     }
@@ -108,7 +111,7 @@ public class GuildManager {
 
     public static String getRank(ServerPlayer player) {
         String guildName = getGuild(player);
-        if (guildName != null) {
+        if (guildName != null && guildRanks.get(guildName) != null) {
             return guildRanks.get(guildName).get(player.getStringUUID());
         }
         return null;
@@ -186,6 +189,8 @@ public class GuildManager {
                     Type guildRanksType = new TypeToken<Map<String, Map<String, String>>>() {}.getType();
                     guildRanks.clear();
                     guildRanks.putAll(GSON.fromJson(GSON.toJson(data.get("guildRanks")), guildRanksType));
+                } else {
+                    guildRanks = new HashMap<>();
                 }
             }
 
@@ -195,16 +200,16 @@ public class GuildManager {
         }
     }
 
+    public static Map<String, Map<String, String>> getGuildRanks() {
+        return guildRanks;
+    }
+
     public static Map<String, String> getGuildOwners() {
         return guildOwners;
     }
 
     public static Map<String, String> getOwnerNames() {
         return ownerNames;
-    }
-
-    public static Map<String, Map<String, String>> getGuildRanks() {
-        return guildRanks;
     }
 
     public static boolean arePlayersInSameGuild(Player player1, Player player2) {
@@ -217,3 +222,5 @@ public class GuildManager {
         return playerGuilds.get(player.getStringUUID());
     }
 }
+
+

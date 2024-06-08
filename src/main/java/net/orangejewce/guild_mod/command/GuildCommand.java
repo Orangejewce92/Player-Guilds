@@ -1,6 +1,7 @@
 package net.orangejewce.guild_mod.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.Message;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -39,6 +40,7 @@ public class GuildCommand {
     private static final String OFFICER = "Officer";
     private static final String MEMBER = "Member";
     private static final String RECRUIT = "Recruit";
+
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("guild")
                 .then(Commands.literal("create")
@@ -85,6 +87,7 @@ public class GuildCommand {
     private static int createGuild(CommandContext<CommandSourceStack> context, String guildName) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         GuildManager.createGuild(guildName, player);
+        GuildManager.promoteMember(guildName, player, GuildManager.OWNER);
         context.getSource().sendSuccess(() -> Component.literal("Guild created: " + guildName), false);
         return 1;
     }
@@ -160,14 +163,22 @@ public class GuildCommand {
         String guildName = GuildManager.getGuild(player);
         if (guildName != null) {
             Set<ServerPlayer> members = GuildManager.getMembers(guildName, player.getServer().getPlayerList().getPlayers());
+
+            // Create the base message
             MutableComponent message = Component.literal("Guild members: ");
+
+            // Append each member's name with light blue color
             for (ServerPlayer member : members) {
-                Component memberName = Component.literal(member.getName().getString() + " (" + GuildManager.getRank(member) + ")").withStyle(style -> style.withColor(TextColor.fromRgb(0x55FFFF)));
+                String rank = GuildManager.getRank(member);
+                Component memberName = Component.literal(member.getName().getString() + " (" + rank + ")").withStyle(style -> style.withColor(TextColor.fromRgb(0x55FFFF)));
                 message.append(memberName).append(Component.literal(", "));
             }
+
+            // Remove the trailing comma and space
             if (!members.isEmpty()) {
                 message.getSiblings().remove(message.getSiblings().size() - 1);
             }
+
             context.getSource().sendSuccess(() -> message, false);
             return 1;
         } else {
@@ -175,6 +186,7 @@ public class GuildCommand {
             return 0;
         }
     }
+
     private static int showGuildLeaderboard(CommandContext<CommandSourceStack> context) {
         Map<String, String> guildOwners = GuildManager.getGuildOwners();
         Map<String, String> ownerNames = GuildManager.getOwnerNames();
@@ -189,6 +201,7 @@ public class GuildCommand {
         context.getSource().sendSuccess(() -> message, false);
         return 1;
     }
+
     private static int addItemToStorage(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String guildName = GuildManager.getGuild(player);
@@ -230,28 +243,29 @@ public class GuildCommand {
             return 0;
         }
     }
-
     private static int openGuildStorage(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String guildName = GuildManager.getGuild(player);
         if (guildName != null) {
-            String playerRank = GuildManager.getRank(player);
-            if (playerRank.equals(RECRUIT)) {
+            String rank = GuildManager.getRank(player);
+            if (rank != null && !rank.equals(GuildManager.RECRUIT)) { // Prevent recruits from accessing storage
+                MenuProvider containerProvider = new SimpleMenuProvider(
+                        (id, playerInventory, playerEntity) -> new GuildStorageContainer(id, playerInventory, GuildManager.getGuildStorage(guildName), guildName),
+                        Component.literal("Guild Storage")
+                );
+                NetworkHooks.openScreen(player, containerProvider, buf -> buf.writeUtf(guildName));
+                return 1;
+            } else {
                 context.getSource().sendFailure(Component.literal("You do not have permission to access the guild storage."));
                 return 0;
             }
-
-            MenuProvider containerProvider = new SimpleMenuProvider(
-                    (id, playerInventory, playerEntity) -> new GuildStorageContainer(id, playerInventory, GuildManager.getGuildStorage(guildName), guildName),
-                    Component.literal("Guild Storage")
-            );
-            NetworkHooks.openScreen(player, containerProvider, buf -> buf.writeUtf(guildName));
-            return 1;
         } else {
             context.getSource().sendFailure(Component.literal("You are not in a guild."));
             return 0;
         }
     }
+
+
     private static int promoteMember(CommandContext<CommandSourceStack> context, String playerName, String newRank) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         ServerPlayer targetPlayer = player.getServer().getPlayerList().getPlayerByName(playerName);
@@ -287,24 +301,28 @@ public class GuildCommand {
             return 0;
         }
     }
-
     private static int showGuildInfo(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String guildName = GuildManager.getGuild(player);
         if (guildName != null) {
             Set<ServerPlayer> members = GuildManager.getMembers(guildName, player.getServer().getPlayerList().getPlayers());
+
             MutableComponent message = Component.literal("Guild Info:\n");
-            message.append(Component.literal("Owner: " + GuildManager.getOwnerNames().get(guildName) + "\n").withStyle(style -> style.withColor(TextColor.fromRgb(0xFFD700))));
+            message.append(Component.literal("Owner: " + GuildManager.getOwnerNames().get(guildName) + "\n").withStyle(style -> style.withColor(TextColor.fromRgb(0x00FF00))));
+
             for (ServerPlayer member : members) {
                 String rank = GuildManager.getRank(member);
-                message.append(Component.literal(member.getName().getString() + " - " + rank + "\n").withStyle(style -> style.withColor(TextColor.fromRgb(0x00FF00))));
+                Component memberInfo = Component.literal(member.getName().getString() + " (" + rank + ")\n").withStyle(style -> style.withColor(TextColor.fromRgb(0x55FFFF)));
+                message.append(memberInfo);
             }
+
             context.getSource().sendSuccess(() -> message, false);
             return 1;
         } else {
-            context.getSource().sendFailure(Component.literal("You are not in a guild."));
+            context.getSource().sendFailure(Component.literal("No info to display."));
             return 0;
         }
     }
+
 }
 
