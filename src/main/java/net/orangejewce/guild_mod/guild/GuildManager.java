@@ -19,9 +19,16 @@ import java.util.Map;
 import java.util.Set;
 
 public class GuildManager {
+    public static final String OWNER = "Owner";
+    public static final String OFFICER = "Officer";
+    public static final String MEMBER = "Member";
+    public static final String RECRUIT = "Recruit";
+
     private static final Map<String, Set<String>> guildMembers = new HashMap<>();
     private static final Map<String, String> playerGuilds = new HashMap<>();
     private static final Map<String, String> guildOwners = new HashMap<>();
+    private static final Map<String, String> ownerNames = new HashMap<>();
+    private static final Map<String, Map<String, String>> guildRanks = new HashMap<>(); // Maps guild names to player UUIDs and their ranks
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static File dataFile;
     private static final Map<String, ItemStackHandler> guildStorages = new HashMap<>();
@@ -45,6 +52,9 @@ public class GuildManager {
         if (!guildMembers.containsKey(guildName)) {
             guildMembers.put(guildName, new HashSet<>());
             guildOwners.put(guildName, owner.getStringUUID());
+            ownerNames.put(guildName, owner.getName().getString());
+            guildRanks.put(guildName, new HashMap<>());
+            guildRanks.get(guildName).put(owner.getStringUUID(), OWNER);
             joinGuild(guildName, owner);
             saveGuildData();
         }
@@ -52,10 +62,10 @@ public class GuildManager {
 
     public static boolean joinGuild(String guildName, ServerPlayer player) {
         guildMembers.computeIfAbsent(guildName, k -> new HashSet<>());
-
         leaveCurrentGuild(player);
         guildMembers.get(guildName).add(player.getStringUUID());
         playerGuilds.put(player.getStringUUID(), guildName);
+        guildRanks.computeIfAbsent(guildName, k -> new HashMap<>()).put(player.getStringUUID(), RECRUIT);
         saveGuildData();
         return true;
     }
@@ -67,9 +77,12 @@ public class GuildManager {
             Set<String> members = guildMembers.get(guildName);
             if (members != null) {
                 members.remove(playerUUID);
+                guildRanks.get(guildName).remove(playerUUID);
                 if (members.isEmpty()) {
                     guildMembers.remove(guildName);
                     guildOwners.remove(guildName);
+                    ownerNames.remove(guildName);
+                    guildRanks.remove(guildName);
                 }
                 saveGuildData();
             }
@@ -93,6 +106,24 @@ public class GuildManager {
         return members;
     }
 
+    public static String getRank(ServerPlayer player) {
+        String guildName = getGuild(player);
+        if (guildName != null) {
+            return guildRanks.get(guildName).get(player.getStringUUID());
+        }
+        return null;
+    }
+
+    public static void promoteMember(String guildName, ServerPlayer player, String newRank) {
+        guildRanks.get(guildName).put(player.getStringUUID(), newRank);
+        saveGuildData();
+    }
+
+    public static void demoteMember(String guildName, ServerPlayer player, String newRank) {
+        guildRanks.get(guildName).put(player.getStringUUID(), newRank);
+        saveGuildData();
+    }
+
     public static void saveGuildData() {
         if (dataFile == null) {
             return; // World directory is not set
@@ -108,6 +139,8 @@ public class GuildManager {
                 data.put("guildMembers", guildMembers);
                 data.put("playerGuilds", playerGuilds);
                 data.put("guildOwners", guildOwners);
+                data.put("ownerNames", ownerNames);
+                data.put("guildRanks", guildRanks);
                 GSON.toJson(data, writer);
                 System.out.println("Guild data saved.");
             }
@@ -121,26 +154,38 @@ public class GuildManager {
             return; // World directory is not set or file does not exist
         }
         try (FileReader reader = new FileReader(dataFile)) {
-            Type dataType = new TypeToken<Map<String, Object>>(){}.getType();
+            Type dataType = new TypeToken<Map<String, Object>>() {}.getType();
             Map<String, Object> data = GSON.fromJson(reader, dataType);
 
             if (data != null) {
                 if (data.get("guildMembers") != null) {
-                    Type guildMembersType = new TypeToken<Map<String, Set<String>>>(){}.getType();
+                    Type guildMembersType = new TypeToken<Map<String, Set<String>>>() {}.getType();
                     guildMembers.clear();
                     guildMembers.putAll(GSON.fromJson(GSON.toJson(data.get("guildMembers")), guildMembersType));
                 }
 
                 if (data.get("playerGuilds") != null) {
-                    Type playerGuildsType = new TypeToken<Map<String, String>>(){}.getType();
+                    Type playerGuildsType = new TypeToken<Map<String, String>>() {}.getType();
                     playerGuilds.clear();
                     playerGuilds.putAll(GSON.fromJson(GSON.toJson(data.get("playerGuilds")), playerGuildsType));
                 }
 
                 if (data.get("guildOwners") != null) {
-                    Type guildOwnersType = new TypeToken<Map<String, String>>(){}.getType();
+                    Type guildOwnersType = new TypeToken<Map<String, String>>() {}.getType();
                     guildOwners.clear();
                     guildOwners.putAll(GSON.fromJson(GSON.toJson(data.get("guildOwners")), guildOwnersType));
+                }
+
+                if (data.get("ownerNames") != null) {
+                    Type ownerNamesType = new TypeToken<Map<String, String>>() {}.getType();
+                    ownerNames.clear();
+                    ownerNames.putAll(GSON.fromJson(GSON.toJson(data.get("ownerNames")), ownerNamesType));
+                }
+
+                if (data.get("guildRanks") != null) {
+                    Type guildRanksType = new TypeToken<Map<String, Map<String, String>>>() {}.getType();
+                    guildRanks.clear();
+                    guildRanks.putAll(GSON.fromJson(GSON.toJson(data.get("guildRanks")), guildRanksType));
                 }
             }
 
@@ -152,6 +197,14 @@ public class GuildManager {
 
     public static Map<String, String> getGuildOwners() {
         return guildOwners;
+    }
+
+    public static Map<String, String> getOwnerNames() {
+        return ownerNames;
+    }
+
+    public static Map<String, Map<String, String>> getGuildRanks() {
+        return guildRanks;
     }
 
     public static boolean arePlayersInSameGuild(Player player1, Player player2) {

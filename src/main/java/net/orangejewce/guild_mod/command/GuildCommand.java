@@ -30,20 +30,20 @@ import net.orangejewce.guild_mod.guild.GuildStorageManager;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.function.Supplier;
+
 
 public class GuildCommand {
+    private static final String OWNER = "Owner";
+    private static final String OFFICER = "Officer";
+    private static final String MEMBER = "Member";
+    private static final String RECRUIT = "Recruit";
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("guild")
                 .then(Commands.literal("create")
                         .then(Commands.argument("guildName", StringArgumentType.string())
                                 .executes(context -> createGuild(context, StringArgumentType.getString(context, "guildName")))))
-                .then(Commands.literal("join")
-                        .then(Commands.argument("guildName", StringArgumentType.string())
-                                .executes(context -> joinGuild(context, StringArgumentType.getString(context, "guildName")))))
-                .then(Commands.literal("leave")
-                        .executes(GuildCommand::leaveGuild))
-                .then(Commands.literal("status")
-                        .executes(GuildCommand::checkGuildStatus))
                 .then(Commands.literal("invite")
                         .then(Commands.argument("playerName", StringArgumentType.string())
                                 .executes(context -> invitePlayer(context, StringArgumentType.getString(context, "playerName"), context.getSource().getPlayerOrException().getName().getString()))))
@@ -53,6 +53,12 @@ public class GuildCommand {
                 .then(Commands.literal("deny")
                         .then(Commands.argument("guildName", StringArgumentType.string())
                                 .executes(context -> denyInvite(context, StringArgumentType.getString(context, "guildName")))))
+                .then(Commands.literal("leave")
+                        .executes(GuildCommand::leaveGuild))
+                .then(Commands.literal("status")
+                        .executes(GuildCommand::checkGuildStatus))
+                .then(Commands.literal("info")
+                        .executes(GuildCommand::showGuildInfo))
                 .then(Commands.literal("list")
                         .executes(GuildCommand::listGuildMembers))
                 .then(Commands.literal("leaderboard")
@@ -65,7 +71,15 @@ public class GuildCommand {
                                         .then(Commands.argument("amplifier", IntegerArgumentType.integer())
                                                 .executes(context -> addGuildBuff(context, StringArgumentType.getString(context, "effectName"), IntegerArgumentType.getInteger(context, "duration"), IntegerArgumentType.getInteger(context, "amplifier")))))))
                 .then(Commands.literal("storage")
-                        .executes(GuildCommand::openGuildStorage)));
+                        .executes(GuildCommand::openGuildStorage))
+                .then(Commands.literal("promote")
+                        .then(Commands.argument("playerName", StringArgumentType.string())
+                                .then(Commands.argument("rank", StringArgumentType.string())
+                                        .executes(context -> promoteMember(context, StringArgumentType.getString(context, "playerName"), StringArgumentType.getString(context, "rank"))))))
+                .then(Commands.literal("demote")
+                        .then(Commands.argument("playerName", StringArgumentType.string())
+                                .then(Commands.argument("rank", StringArgumentType.string())
+                                        .executes(context -> demoteMember(context, StringArgumentType.getString(context, "playerName"), StringArgumentType.getString(context, "rank")))))));
     }
 
     private static int createGuild(CommandContext<CommandSourceStack> context, String guildName) throws CommandSyntaxException {
@@ -73,36 +87,6 @@ public class GuildCommand {
         GuildManager.createGuild(guildName, player);
         context.getSource().sendSuccess(() -> Component.literal("Guild created: " + guildName), false);
         return 1;
-    }
-
-    private static int joinGuild(CommandContext<CommandSourceStack> context, String guildName) throws CommandSyntaxException {
-        ServerPlayer player = context.getSource().getPlayerOrException();
-        if (GuildManager.joinGuild(guildName, player)) {
-            context.getSource().sendSuccess(() -> Component.literal("Joined guild: " + guildName), false);
-            return 1;
-        } else {
-            context.getSource().sendFailure(Component.literal("Guild not found: " + guildName));
-            return 0;
-        }
-    }
-
-    private static int leaveGuild(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        ServerPlayer player = context.getSource().getPlayerOrException();
-        GuildManager.leaveCurrentGuild(player);
-        context.getSource().sendSuccess(() -> Component.literal("Left the guild."), false);
-        return 1;
-    }
-
-    private static int checkGuildStatus(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        ServerPlayer player = context.getSource().getPlayerOrException();
-        String guildName = GuildManager.getGuild(player);
-        if (guildName != null) {
-            context.getSource().sendSuccess(() -> Component.literal("You are in guild: " + guildName), false);
-            return 1;
-        } else {
-            context.getSource().sendFailure(Component.literal("You are not in a guild."));
-            return 0;
-        }
     }
 
     private static int invitePlayer(CommandContext<CommandSourceStack> context, String playerName, String inviterName) throws CommandSyntaxException {
@@ -115,7 +99,12 @@ public class GuildCommand {
 
         String guildName = GuildManager.getGuild(inviter);
         if (guildName != null) {
-            // Send invitation message
+            String inviterRank = GuildManager.getRank(inviter);
+            if (!inviterRank.equals(GuildManager.OFFICER) && !inviterRank.equals(GuildManager.OWNER)) {
+                context.getSource().sendFailure(Component.literal("You do not have permission to invite players."));
+                return 0;
+            }
+
             Component message = Component.literal(inviterName + " has invited you to join the guild " + guildName + ". ")
                     .append(Component.literal("[Accept]").withStyle(style -> style.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/guild accept " + guildName))))
                     .append(" ")
@@ -147,27 +136,18 @@ public class GuildCommand {
         return 1;
     }
 
-    private static int listGuildMembers(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+    private static int leaveGuild(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        GuildManager.leaveCurrentGuild(player);
+        context.getSource().sendSuccess(() -> Component.literal("Left the guild."), false);
+        return 1;
+    }
+
+    private static int checkGuildStatus(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String guildName = GuildManager.getGuild(player);
         if (guildName != null) {
-            Set<ServerPlayer> members = GuildManager.getMembers(guildName, player.getServer().getPlayerList().getPlayers());
-
-            // Create the base message
-            MutableComponent message = Component.literal("Guild members: ");
-
-            // Append each member's name with light blue color
-            for (ServerPlayer member : members) {
-                Component memberName = Component.literal(member.getName().getString()).withStyle(style -> style.withColor(TextColor.fromRgb(0x55FFFF)));
-                message.append(memberName).append(Component.literal(", "));
-            }
-
-            // Remove the trailing comma and space
-            if (!members.isEmpty()) {
-                message.getSiblings().remove(message.getSiblings().size() - 1);
-            }
-
-            context.getSource().sendSuccess(() -> message, false);
+            context.getSource().sendSuccess(() -> Component.literal("You are in guild: " + guildName), false);
             return 1;
         } else {
             context.getSource().sendFailure(Component.literal("You are not in a guild."));
@@ -175,20 +155,40 @@ public class GuildCommand {
         }
     }
 
+    private static int listGuildMembers(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String guildName = GuildManager.getGuild(player);
+        if (guildName != null) {
+            Set<ServerPlayer> members = GuildManager.getMembers(guildName, player.getServer().getPlayerList().getPlayers());
+            MutableComponent message = Component.literal("Guild members: ");
+            for (ServerPlayer member : members) {
+                Component memberName = Component.literal(member.getName().getString() + " (" + GuildManager.getRank(member) + ")").withStyle(style -> style.withColor(TextColor.fromRgb(0x55FFFF)));
+                message.append(memberName).append(Component.literal(", "));
+            }
+            if (!members.isEmpty()) {
+                message.getSiblings().remove(message.getSiblings().size() - 1);
+            }
+            context.getSource().sendSuccess(() -> message, false);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("You are not in a guild."));
+            return 0;
+        }
+    }
     private static int showGuildLeaderboard(CommandContext<CommandSourceStack> context) {
         Map<String, String> guildOwners = GuildManager.getGuildOwners();
+        Map<String, String> ownerNames = GuildManager.getOwnerNames();
         MutableComponent message = Component.literal("Guild Leaderboard:\n");
 
         for (Map.Entry<String, String> entry : guildOwners.entrySet()) {
             String guildName = entry.getKey();
-            String ownerName = entry.getValue();
+            String ownerUUID = entry.getValue();
+            String ownerName = ownerNames.get(guildName);
             message.append(Component.literal(guildName + " (Owner: " + ownerName + ")\n").withStyle(style -> style.withColor(TextColor.fromRgb(0x00FF00))));
         }
-
         context.getSource().sendSuccess(() -> message, false);
         return 1;
     }
-
     private static int addItemToStorage(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String guildName = GuildManager.getGuild(player);
@@ -233,13 +233,78 @@ public class GuildCommand {
 
     private static int openGuildStorage(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        String guildName = "default"; // Retrieve the actual guild name of the player here
-        MenuProvider containerProvider = new SimpleMenuProvider(
-                (id, playerInventory, playerEntity) -> new GuildStorageContainer(id, playerInventory, GuildManager.getGuildStorage(guildName), guildName),
-                Component.literal("Guild Storage")
-        );
-        NetworkHooks.openScreen(player, containerProvider, buf -> buf.writeUtf(guildName));
-        return 1;
+        String guildName = GuildManager.getGuild(player);
+        if (guildName != null) {
+            String playerRank = GuildManager.getRank(player);
+            if (playerRank.equals(RECRUIT)) {
+                context.getSource().sendFailure(Component.literal("You do not have permission to access the guild storage."));
+                return 0;
+            }
+
+            MenuProvider containerProvider = new SimpleMenuProvider(
+                    (id, playerInventory, playerEntity) -> new GuildStorageContainer(id, playerInventory, GuildManager.getGuildStorage(guildName), guildName),
+                    Component.literal("Guild Storage")
+            );
+            NetworkHooks.openScreen(player, containerProvider, buf -> buf.writeUtf(guildName));
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("You are not in a guild."));
+            return 0;
+        }
+    }
+    private static int promoteMember(CommandContext<CommandSourceStack> context, String playerName, String newRank) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        ServerPlayer targetPlayer = player.getServer().getPlayerList().getPlayerByName(playerName);
+        if (targetPlayer == null) {
+            context.getSource().sendFailure(Component.literal("Player not found."));
+            return 0;
+        }
+        String guildName = GuildManager.getGuild(player);
+        if (guildName != null) {
+            GuildManager.promoteMember(guildName, targetPlayer, newRank);
+            context.getSource().sendSuccess(() -> Component.literal("Promoted " + playerName + " to " + newRank), false);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("You are not in a guild."));
+            return 0;
+        }
+    }
+
+    private static int demoteMember(CommandContext<CommandSourceStack> context, String playerName, String newRank) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        ServerPlayer targetPlayer = player.getServer().getPlayerList().getPlayerByName(playerName);
+        if (targetPlayer == null) {
+            context.getSource().sendFailure(Component.literal("Player not found."));
+            return 0;
+        }
+        String guildName = GuildManager.getGuild(player);
+        if (guildName != null) {
+            GuildManager.demoteMember(guildName, targetPlayer, newRank);
+            context.getSource().sendSuccess(() -> Component.literal("Demoted " + playerName + " to " + newRank), false);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("You are not in a guild."));
+            return 0;
+        }
+    }
+
+    private static int showGuildInfo(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        String guildName = GuildManager.getGuild(player);
+        if (guildName != null) {
+            Set<ServerPlayer> members = GuildManager.getMembers(guildName, player.getServer().getPlayerList().getPlayers());
+            MutableComponent message = Component.literal("Guild Info:\n");
+            message.append(Component.literal("Owner: " + GuildManager.getOwnerNames().get(guildName) + "\n").withStyle(style -> style.withColor(TextColor.fromRgb(0xFFD700))));
+            for (ServerPlayer member : members) {
+                String rank = GuildManager.getRank(member);
+                message.append(Component.literal(member.getName().getString() + " - " + rank + "\n").withStyle(style -> style.withColor(TextColor.fromRgb(0x00FF00))));
+            }
+            context.getSource().sendSuccess(() -> message, false);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("You are not in a guild."));
+            return 0;
+        }
     }
 }
 
