@@ -17,11 +17,14 @@ public class GuildConfig {
 
     public static class ConfigValues {
         public final ForgeConfigSpec.BooleanValue friendlyFire;
+        public final ForgeConfigSpec.BooleanValue showGuildNames;
 
         public ConfigValues(ForgeConfigSpec.Builder builder) {
             builder.push("guild");
             friendlyFire = builder.comment("Enable or disable friendly fire for guild members.")
                     .define("friendlyFire", false);
+            showGuildNames = builder.comment("Show guild names above players' heads")
+                    .define("showGuildNames", true);
             builder.pop();
         }
     }

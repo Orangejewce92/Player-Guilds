@@ -29,6 +29,7 @@ import net.orangejewce.guild_mod.guild.GuildBuffManager;
 import net.orangejewce.guild_mod.guild.GuildManager;
 import net.orangejewce.guild_mod.guild.GuildStorageManager;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -40,6 +41,8 @@ public class GuildCommand {
     private static final String OFFICER = "Officer";
     private static final String MEMBER = "Member";
     private static final String RECRUIT = "Recruit";
+    private static final Map<String, Long> guildBuffCooldowns = new HashMap<>();
+
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("guild")
@@ -214,34 +217,49 @@ public class GuildCommand {
             return 0;
         }
     }
-
     private static int addGuildBuff(CommandContext<CommandSourceStack> context, String effectName, int duration, int amplifier) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String guildName = GuildManager.getGuild(player);
-        if (guildName != null) {
-            MobEffectInstance effect;
-            switch (effectName.toLowerCase()) {
-                case "speed":
-                    effect = new MobEffectInstance(MobEffects.MOVEMENT_SPEED, duration, amplifier);
-                    break;
-                case "strength":
-                    effect = new MobEffectInstance(MobEffects.DAMAGE_BOOST, duration, amplifier);
-                    break;
-                case "regeneration":
-                    effect = new MobEffectInstance(MobEffects.REGENERATION, duration, amplifier);
-                    break;
-                // Add more cases for other effects
-                default:
-                    context.getSource().sendFailure(Component.literal("Invalid effect name."));
-                    return 0;
-            }
-            GuildBuffManager.addGuildBuff(guildName, effect);
-            context.getSource().sendSuccess(() -> Component.literal("Buff added to guild: " + effectName), false);
-            return 1;
-        } else {
+
+        if (guildName == null) {
             context.getSource().sendFailure(Component.literal("You are not in a guild."));
             return 0;
         }
+
+        if (!GuildManager.getGuildRanks().get(guildName).get(player.getStringUUID()).equals(GuildManager.OWNER)) {
+            context.getSource().sendFailure(Component.literal("Only the guild owner can add buffs."));
+            return 0;
+        }
+
+        long currentTime = System.currentTimeMillis();
+        long lastBuffTime = guildBuffCooldowns.getOrDefault(guildName, 0L);
+        long cooldownPeriod = 3600000L; // 1 hour in milliseconds
+
+        if (currentTime - lastBuffTime < cooldownPeriod) {
+            context.getSource().sendFailure(Component.literal("You must wait before adding another buff."));
+            return 0;
+        }
+        MobEffectInstance effect;
+        switch (effectName.toLowerCase()) {
+            case "speed":
+                effect = new MobEffectInstance(MobEffects.MOVEMENT_SPEED, duration, amplifier);
+                break;
+            case "strength":
+                effect = new MobEffectInstance(MobEffects.DAMAGE_BOOST, duration, amplifier);
+                break;
+            case "regeneration":
+                effect = new MobEffectInstance(MobEffects.REGENERATION, duration, amplifier);
+                break;
+            // Add more cases for other effects
+            default:
+                context.getSource().sendFailure(Component.literal("Invalid effect name."));
+                return 0;
+        }
+
+        GuildBuffManager.addGuildBuff(guildName, effect);
+        guildBuffCooldowns.put(guildName, currentTime);
+        context.getSource().sendSuccess(() -> Component.literal("Buff added to guild: " + effectName), false);
+        return 1;
     }
     private static int openGuildStorage(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();

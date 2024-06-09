@@ -92,7 +92,7 @@ public class GuildManager {
         }
     }
 
-    public static String getGuild(ServerPlayer player) {
+    public static String getGuild(Player player) {
         return playerGuilds.get(player.getStringUUID());
     }
 

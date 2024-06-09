@@ -20,6 +20,7 @@ import net.minecraftforge.registries.RegistryObject;
 import net.orangejewce.guild_mod.command.GuildCommand;
 import net.orangejewce.guild_mod.config.GuildConfig;
 import net.orangejewce.guild_mod.container.GuildStorageContainer;
+import net.orangejewce.guild_mod.events.RenderGuildNameTagEventHandler;
 import net.orangejewce.guild_mod.screen.GuildStorageScreen;
 import net.orangejewce.guild_mod.events.GuildModEventHandler;
 import org.apache.logging.log4j.LogManager;
@@ -46,6 +47,7 @@ public class GuildMod {
         // Register the event handler on the MinecraftForge event bus
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new GuildModEventHandler());
+        MinecraftForge.EVENT_BUS.register(new RenderGuildNameTagEventHandler());
     }
 
     private void setup(final FMLCommonSetupEvent event) {
