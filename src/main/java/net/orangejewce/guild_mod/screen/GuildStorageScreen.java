@@ -7,6 +7,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.orangejewce.guild_mod.container.GuildStorageContainer;
+import org.jetbrains.annotations.NotNull;
 
 public class GuildStorageScreen extends AbstractContainerScreen<GuildStorageContainer> {
     private static final ResourceLocation CHEST_GUI_TEXTURE = new ResourceLocation("textures/gui/container/generic_54.png");
@@ -20,7 +21,7 @@ public class GuildStorageScreen extends AbstractContainerScreen<GuildStorageCont
     }
 
     @Override
-    protected void renderBg(GuiGraphics guiGraphics, float partialTicks, int x, int y) {
+    protected void renderBg(@NotNull GuiGraphics guiGraphics, float partialTicks, int x, int y) {
         RenderSystem.setShaderTexture(0, CHEST_GUI_TEXTURE);
         int i = (this.width - this.imageWidth) / 2;
         int j = (this.height - this.imageHeight) / 2;
@@ -29,7 +30,7 @@ public class GuildStorageScreen extends AbstractContainerScreen<GuildStorageCont
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
+    public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
         this.renderBackground(guiGraphics);
         super.render(guiGraphics, mouseX, mouseY, partialTicks);
         this.renderTooltip(guiGraphics, mouseX, mouseY);

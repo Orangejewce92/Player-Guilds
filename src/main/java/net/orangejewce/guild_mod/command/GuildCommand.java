@@ -1,48 +1,38 @@
 package net.orangejewce.guild_mod.command;
 
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.Message;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextColor;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.items.IItemHandler;
-import net.minecraftforge.items.ItemStackHandler;
+import net.minecraft.world.item.Items;
 import net.minecraftforge.network.NetworkHooks;
-import net.orangejewce.guild_mod.GuildMod;
+import net.minecraftforge.registries.ForgeRegistries;
+import net.orangejewce.guild_mod.config.GuildConfig;
 import net.orangejewce.guild_mod.container.GuildStorageContainer;
 import net.orangejewce.guild_mod.guild.GuildBuffManager;
 import net.orangejewce.guild_mod.guild.GuildManager;
 import net.orangejewce.guild_mod.guild.GuildStorageManager;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.function.Supplier;
+import java.util.*;
 
 
 public class GuildCommand {
-    private static final String OWNER = "Owner";
-    private static final String OFFICER = "Officer";
-    private static final String MEMBER = "Member";
-    private static final String RECRUIT = "Recruit";
     private static final Map<String, Long> guildBuffCooldowns = new HashMap<>();
-
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("guild")
@@ -89,15 +79,51 @@ public class GuildCommand {
 
     private static int createGuild(CommandContext<CommandSourceStack> context, String guildName) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        GuildManager.createGuild(guildName, player);
-        GuildManager.promoteMember(guildName, player, GuildManager.OWNER);
-        context.getSource().sendSuccess(() -> Component.literal("Guild created: " + guildName), false);
+        int guildCreationCost = GuildConfig.VALUES.guildCreationCost.get();
+        Item guildCreationItem = ForgeRegistries.ITEMS.getValue(new ResourceLocation(GuildConfig.VALUES.guildCreationItem.get()));
+
+        if (hasEnoughCurrency(player, guildCreationItem, guildCreationCost)) {
+            deductCurrency(player, guildCreationItem, guildCreationCost);
+            GuildManager.createGuild(guildName, player);
+            GuildManager.promoteMember(guildName, player, GuildManager.OWNER);
+            context.getSource().sendSuccess(() -> Component.literal("Guild created: " + guildName), false);
+        } else {
+            assert guildCreationItem != null;
+            context.getSource().sendFailure(Component.literal("You do not have enough " + guildCreationItem.getDescriptionId() + " to create a guild."));
+        }
+
         return 1;
+    }
+
+    private static boolean hasEnoughCurrency(ServerPlayer player, Item item, int cost) {
+        int itemCount = 0;
+        for (ItemStack itemStack : player.getInventory().items) {
+            if (itemStack.getItem() == item) {
+                itemCount += itemStack.getCount();
+            }
+        }
+        return itemCount >= cost;
+    }
+
+    private static void deductCurrency(ServerPlayer player, Item item, int cost) {
+        int remainingCost = cost;
+        for (ItemStack itemStack : player.getInventory().items) {
+            if (itemStack.getItem() == item) {
+                int stackCount = itemStack.getCount();
+                if (stackCount >= remainingCost) {
+                    itemStack.shrink(remainingCost);
+                    break;
+                } else {
+                    remainingCost -= stackCount;
+                    itemStack.shrink(stackCount);
+                }
+            }
+        }
     }
 
     private static int invitePlayer(CommandContext<CommandSourceStack> context, String playerName, String inviterName) throws CommandSyntaxException {
         ServerPlayer inviter = context.getSource().getPlayerOrException();
-        ServerPlayer invitee = inviter.getServer().getPlayerList().getPlayerByName(playerName);
+        ServerPlayer invitee = Objects.requireNonNull(inviter.getServer()).getPlayerList().getPlayerByName(playerName);
         if (invitee == null) {
             context.getSource().sendFailure(Component.literal("Player not found."));
             return 0;
@@ -106,6 +132,7 @@ public class GuildCommand {
         String guildName = GuildManager.getGuild(inviter);
         if (guildName != null) {
             String inviterRank = GuildManager.getRank(inviter);
+            assert inviterRank != null;
             if (!inviterRank.equals(GuildManager.OFFICER) && !inviterRank.equals(GuildManager.OWNER)) {
                 context.getSource().sendFailure(Component.literal("You do not have permission to invite players."));
                 return 0;
@@ -165,7 +192,7 @@ public class GuildCommand {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String guildName = GuildManager.getGuild(player);
         if (guildName != null) {
-            Set<ServerPlayer> members = GuildManager.getMembers(guildName, player.getServer().getPlayerList().getPlayers());
+            Set<ServerPlayer> members = GuildManager.getMembers(guildName, Objects.requireNonNull(player.getServer()).getPlayerList().getPlayers());
 
             // Create the base message
             MutableComponent message = Component.literal("Guild members: ");
@@ -286,7 +313,7 @@ public class GuildCommand {
 
     private static int promoteMember(CommandContext<CommandSourceStack> context, String playerName, String newRank) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        ServerPlayer targetPlayer = player.getServer().getPlayerList().getPlayerByName(playerName);
+        ServerPlayer targetPlayer = Objects.requireNonNull(player.getServer()).getPlayerList().getPlayerByName(playerName);
         if (targetPlayer == null) {
             context.getSource().sendFailure(Component.literal("Player not found."));
             return 0;
@@ -304,7 +331,7 @@ public class GuildCommand {
 
     private static int demoteMember(CommandContext<CommandSourceStack> context, String playerName, String newRank) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        ServerPlayer targetPlayer = player.getServer().getPlayerList().getPlayerByName(playerName);
+        ServerPlayer targetPlayer = Objects.requireNonNull(player.getServer()).getPlayerList().getPlayerByName(playerName);
         if (targetPlayer == null) {
             context.getSource().sendFailure(Component.literal("Player not found."));
             return 0;
@@ -323,7 +350,7 @@ public class GuildCommand {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String guildName = GuildManager.getGuild(player);
         if (guildName != null) {
-            Set<ServerPlayer> members = GuildManager.getMembers(guildName, player.getServer().getPlayerList().getPlayers());
+            Set<ServerPlayer> members = GuildManager.getMembers(guildName, Objects.requireNonNull(player.getServer()).getPlayerList().getPlayers());
 
             MutableComponent message = Component.literal("Guild Info:\n");
             message.append(Component.literal("Owner: " + GuildManager.getOwnerNames().get(guildName) + "\n").withStyle(style -> style.withColor(TextColor.fromRgb(0x00FF00))));

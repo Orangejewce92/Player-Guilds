@@ -222,5 +222,3 @@ public class GuildManager {
         return playerGuilds.get(player.getStringUUID());
     }
 }
-
-

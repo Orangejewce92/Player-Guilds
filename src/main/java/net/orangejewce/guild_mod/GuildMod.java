@@ -1,7 +1,6 @@
 package net.orangejewce.guild_mod;
 
 import net.minecraft.client.gui.screens.MenuScreens;
-import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.extensions.IForgeMenuType;
@@ -20,11 +19,12 @@ import net.minecraftforge.registries.RegistryObject;
 import net.orangejewce.guild_mod.command.GuildCommand;
 import net.orangejewce.guild_mod.config.GuildConfig;
 import net.orangejewce.guild_mod.container.GuildStorageContainer;
-import net.orangejewce.guild_mod.events.RenderGuildNameTagEventHandler;
-import net.orangejewce.guild_mod.screen.GuildStorageScreen;
 import net.orangejewce.guild_mod.events.GuildModEventHandler;
+import net.orangejewce.guild_mod.screen.GuildStorageScreen;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 
 @Mod(GuildMod.MOD_ID)
 public class GuildMod {
@@ -38,7 +38,8 @@ public class GuildMod {
     public GuildMod() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         modEventBus.addListener(this::setup);
-        modEventBus.addListener(this::doClientStuff);
+
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> modEventBus.addListener(this::doClientStuff));
 
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, GuildConfig.COMMON_CONFIG);
 
@@ -47,7 +48,6 @@ public class GuildMod {
         // Register the event handler on the MinecraftForge event bus
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new GuildModEventHandler());
-        MinecraftForge.EVENT_BUS.register(new RenderGuildNameTagEventHandler());
     }
 
     private void setup(final FMLCommonSetupEvent event) {
@@ -57,7 +57,6 @@ public class GuildMod {
 
     private void doClientStuff(final FMLClientSetupEvent event) {
         LOGGER.info("Setting up client stuff");
-        // Client-side initialization code
         MenuScreens.register(GUILD_STORAGE_CONTAINER.get(), GuildStorageScreen::new);
     }
 
