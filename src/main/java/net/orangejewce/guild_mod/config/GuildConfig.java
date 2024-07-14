@@ -20,6 +20,7 @@ public class GuildConfig {
         public final ForgeConfigSpec.BooleanValue showGuildNames;
         public final ForgeConfigSpec.ConfigValue<String> guildCreationItem;
         public final ForgeConfigSpec.IntValue guildCreationCost;
+        public final ForgeConfigSpec.BooleanValue enableGuildBuffs; // Add this line
 
         public ConfigValues(ForgeConfigSpec.Builder builder) {
             builder.push("guild");
@@ -31,6 +32,8 @@ public class GuildConfig {
                     .define("guildCreationItem", "minecraft:gold_ingot");
             guildCreationCost = builder.comment("Amount of item required to create a guild")
                     .defineInRange("guildCreationCost", 10, 1, Integer.MAX_VALUE);
+            enableGuildBuffs = builder.comment("Enable or disable the guild buffs feature.") // Add this block
+                    .define("enableGuildBuffs", true);
             builder.pop();
         }
     }

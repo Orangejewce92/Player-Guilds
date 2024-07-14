@@ -245,6 +245,11 @@ public class GuildCommand {
         }
     }
     private static int addGuildBuff(CommandContext<CommandSourceStack> context, String effectName, int duration, int amplifier) throws CommandSyntaxException {
+        if (!GuildConfig.VALUES.enableGuildBuffs.get()) { // Check if guild buffs are enabled
+            context.getSource().sendFailure(Component.literal("Guild buffs are currently disabled."));
+            return 0;
+        }
+
         ServerPlayer player = context.getSource().getPlayerOrException();
         String guildName = GuildManager.getGuild(player);
 
@@ -288,6 +293,7 @@ public class GuildCommand {
         context.getSource().sendSuccess(() -> Component.literal("Buff added to guild: " + effectName), false);
         return 1;
     }
+
     private static int openGuildStorage(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String guildName = GuildManager.getGuild(player);
