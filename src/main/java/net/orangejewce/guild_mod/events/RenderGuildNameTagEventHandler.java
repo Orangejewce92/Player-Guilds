@@ -21,8 +21,13 @@ public class RenderGuildNameTagEventHandler {
         if (event.getEntity() instanceof ServerPlayer player) {
             String guildName = GuildManager.getGuild(player);
             if (guildName != null) {
+                ChatFormatting color = GuildManager.getGuildColor(String.valueOf(player));
+
+                // Log the fetched color for debugging
+                System.out.println("Color fetched for player " + player.getName().getString() + ": " + (color != null ? color.getName() : "NULL"));
+
                 MutableComponent nameTag = Component.literal(player.getName().getString() + " [" + guildName + "]")
-                        .withStyle(ChatFormatting.YELLOW);
+                        .withStyle(style -> style.withColor(color != null ? color : ChatFormatting.YELLOW));
                 event.setContent(nameTag);
             }
         }

@@ -3,6 +3,7 @@ package net.orangejewce.guild_mod.guild;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import net.minecraft.ChatFormatting;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.items.IItemHandler;
@@ -28,6 +29,7 @@ public class GuildManager {
     private static final Map<String, String> playerGuilds = new HashMap<>();
     private static final Map<String, String> guildOwners = new HashMap<>();
     private static final Map<String, String> ownerNames = new HashMap<>();
+    private static Map<String, ChatFormatting> guildColors = new HashMap<>();
     private static Map<String, Map<String, String>> guildRanks = new HashMap<>();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static File dataFile;
@@ -48,13 +50,14 @@ public class GuildManager {
         }
     }
 
-    public static void createGuild(String guildName, ServerPlayer owner) {
+    public static void createGuild(String guildName, ServerPlayer owner, ChatFormatting colorFormatting) {
         if (!guildMembers.containsKey(guildName)) {
             guildMembers.put(guildName, new HashSet<>());
             guildOwners.put(guildName, owner.getStringUUID());
             ownerNames.put(guildName, owner.getName().getString());
             guildRanks.put(guildName, new HashMap<>());
             guildRanks.get(guildName).put(owner.getStringUUID(), OWNER);
+            guildColors.put(guildName, colorFormatting);
             joinGuild(guildName, owner);
             saveGuildData();
         }
@@ -86,6 +89,7 @@ public class GuildManager {
                     guildOwners.remove(guildName);
                     ownerNames.remove(guildName);
                     guildRanks.remove(guildName);
+                    guildColors.remove(guildName);
                 }
                 saveGuildData();
             }
@@ -144,6 +148,7 @@ public class GuildManager {
                 data.put("guildOwners", guildOwners);
                 data.put("ownerNames", ownerNames);
                 data.put("guildRanks", guildRanks);
+                data.put("guildColors", guildColors);
                 GSON.toJson(data, writer);
                 System.out.println("Guild data saved.");
             }
@@ -192,12 +197,29 @@ public class GuildManager {
                 } else {
                     guildRanks = new HashMap<>();
                 }
+
+                if (data.get("guildColors") != null) {
+                    Type guildColorsType = new TypeToken<Map<String, ChatFormatting>>() {}.getType();
+                    guildColors.clear();
+                    guildColors.putAll(GSON.fromJson(GSON.toJson(data.get("guildColors")), guildColorsType));
+                } else {
+                    guildColors = new HashMap<>();
+                }
             }
 
             System.out.println("Guild data loaded.");
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public static void clearGuildData() {
+        guildMembers.clear();
+        playerGuilds.clear();
+        guildOwners.clear();
+        ownerNames.clear();
+        guildRanks.clear();
+        guildColors.clear();
     }
 
     public static Map<String, Map<String, String>> getGuildRanks() {
@@ -211,6 +233,10 @@ public class GuildManager {
     public static Map<String, String> getOwnerNames() {
         return ownerNames;
     }
+    public static boolean guildExists(String guildName) {
+        return guildMembers.containsKey(guildName);
+    }
+
 
     public static boolean arePlayersInSameGuild(Player player1, Player player2) {
         String guild1 = getGuildName(player1);
@@ -221,4 +247,18 @@ public class GuildManager {
     private static String getGuildName(Player player) {
         return playerGuilds.get(player.getStringUUID());
     }
+
+    public static ChatFormatting getGuildColor(String guildName) {
+        return guildColors.getOrDefault(guildName, ChatFormatting.YELLOW);
+    }
+    private static final Map<String, Boolean> guildChatStatus = new HashMap<>();
+
+    public static void setGuildChatStatus(ServerPlayer player, boolean enable) {
+        guildChatStatus.put(player.getStringUUID(), enable);
+    }
+
+    public static boolean isGuildChatEnabled(ServerPlayer player) {
+        return guildChatStatus.getOrDefault(player.getStringUUID(), false);
+    }
+
 }

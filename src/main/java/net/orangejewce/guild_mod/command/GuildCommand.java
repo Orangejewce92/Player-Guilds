@@ -5,6 +5,9 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.ClickEvent;
@@ -29,6 +32,7 @@ import net.orangejewce.guild_mod.guild.GuildManager;
 import net.orangejewce.guild_mod.guild.GuildStorageManager;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 
 public class GuildCommand {
@@ -38,7 +42,17 @@ public class GuildCommand {
         dispatcher.register(Commands.literal("guild")
                 .then(Commands.literal("create")
                         .then(Commands.argument("guildName", StringArgumentType.string())
-                                .executes(context -> createGuild(context, StringArgumentType.getString(context, "guildName")))))
+                                .then(Commands.argument("color", StringArgumentType.string())
+                                        .suggests(GuildCommand::suggestColors)// New argument for color
+                                        .executes(context -> createGuild(
+                                                context,
+                                                StringArgumentType.getString(context, "guildName"),
+                                                StringArgumentType.getString(context, "color"))))))
+                .then(Commands.literal("chat")
+                        .then(Commands.literal("on")
+                                .executes(context -> toggleGuildChat(context.getSource().getPlayerOrException(), true)))
+                        .then(Commands.literal("off")
+                                .executes(context -> toggleGuildChat(context.getSource().getPlayerOrException(), false))))
                 .then(Commands.literal("invite")
                         .then(Commands.argument("playerName", StringArgumentType.string())
                                 .executes(context -> invitePlayer(context, StringArgumentType.getString(context, "playerName"), context.getSource().getPlayerOrException().getName().getString()))))
@@ -76,17 +90,34 @@ public class GuildCommand {
                                 .then(Commands.argument("rank", StringArgumentType.string())
                                         .executes(context -> demoteMember(context, StringArgumentType.getString(context, "playerName"), StringArgumentType.getString(context, "rank")))))));
     }
+    private static CompletableFuture<Suggestions> suggestColors(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        Arrays.stream(ChatFormatting.values())
+                .filter(ChatFormatting::isColor) // Only include color constants
+                .forEach(color -> builder.suggest(color.getName()));
+        return builder.buildFuture();
+    }
 
-    private static int createGuild(CommandContext<CommandSourceStack> context, String guildName) throws CommandSyntaxException {
+    private static int createGuild(CommandContext<CommandSourceStack> context, String guildName, String color) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         int guildCreationCost = GuildConfig.VALUES.guildCreationCost.get();
         Item guildCreationItem = ForgeRegistries.ITEMS.getValue(new ResourceLocation(GuildConfig.VALUES.guildCreationItem.get()));
 
         if (hasEnoughCurrency(player, guildCreationItem, guildCreationCost)) {
             deductCurrency(player, guildCreationItem, guildCreationCost);
-            GuildManager.createGuild(guildName, player);
+            ChatFormatting colorFormatting = ChatFormatting.getByName(color.toUpperCase());
+            if (colorFormatting == null) {
+                context.getSource().sendFailure(Component.literal("Invalid color specified."));
+                return 0;
+            }
+
+            if (GuildManager.guildExists(guildName)) { // Check if the guild name already exists
+                context.getSource().sendFailure(Component.literal("A guild with this name already exists. Please choose a different name."));
+                return 0;
+            }
+
+            GuildManager.createGuild(guildName, player, colorFormatting);
             GuildManager.promoteMember(guildName, player, GuildManager.OWNER);
-            context.getSource().sendSuccess(() -> Component.literal("Guild created: " + guildName), false);
+            context.getSource().sendSuccess(() -> Component.literal("Guild created: " + guildName).withStyle(colorFormatting), false);
         } else {
             assert guildCreationItem != null;
             context.getSource().sendFailure(Component.literal("You do not have enough " + guildCreationItem.getDescriptionId() + " to create a guild."));
@@ -94,6 +125,7 @@ public class GuildCommand {
 
         return 1;
     }
+
 
     private static boolean hasEnoughCurrency(ServerPlayer player, Item item, int cost) {
         int itemCount = 0;
@@ -373,6 +405,11 @@ public class GuildCommand {
             context.getSource().sendFailure(Component.literal("No info to display."));
             return 0;
         }
+    }
+    private static int toggleGuildChat(ServerPlayer player, boolean enable) {
+        GuildManager.setGuildChatStatus(player, enable);
+        player.sendSystemMessage(Component.literal("Guild chat " + (enable ? "enabled" : "disabled") + "."));
+        return 1;
     }
 
 }

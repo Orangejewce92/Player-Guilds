@@ -37,4 +37,7 @@ public class GuildStorageManager {
     public static void loadGuildData() {
         // Implementation to load guild storage data
     }
+    public static void clearGuildData() {
+        guildStorages.clear();
+    }
 }

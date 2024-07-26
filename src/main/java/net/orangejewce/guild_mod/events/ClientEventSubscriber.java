@@ -1,6 +1,7 @@
 package net.orangejewce.guild_mod.events;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -13,8 +14,6 @@ import net.minecraftforge.fml.common.Mod;
 import net.orangejewce.guild_mod.GuildMod;
 import net.orangejewce.guild_mod.config.GuildConfig;
 import net.orangejewce.guild_mod.guild.GuildManager;
-
-import java.util.Objects;
 
 @Mod.EventBusSubscriber(modid = GuildMod.MOD_ID, value = Dist.CLIENT)
 public class ClientEventSubscriber {
@@ -40,8 +39,12 @@ public class ClientEventSubscriber {
             float backgroundOpacity = Minecraft.getInstance().options.getBackgroundOpacity(0.25F);
             int backgroundColor = (int) (backgroundOpacity * 255.0F) << 24;
 
+            // Retrieve the color from the GuildManager
+            ChatFormatting guildColor = GuildManager.getGuildColor(guildName);
+            int colorValue = guildColor.getColor() != null ? guildColor.getColor() : TextColor.fromLegacyFormat(ChatFormatting.YELLOW).getValue();
+
             int guildNameWidth = Minecraft.getInstance().font.width(guildName) / 2;
-            Minecraft.getInstance().font.drawInBatch(guildName, -guildNameWidth, 0, Objects.requireNonNull(TextColor.parseColor("#FFD700")).getValue(), false, poseStack.last().pose(), bufferSource, Font.DisplayMode.NORMAL, backgroundColor, packedLight);
+            Minecraft.getInstance().font.drawInBatch(guildName, -guildNameWidth, 0, colorValue, false, poseStack.last().pose(), bufferSource, Font.DisplayMode.NORMAL, backgroundColor, packedLight);
 
             poseStack.popPose();
         }
